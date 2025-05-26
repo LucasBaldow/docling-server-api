@@ -1,12 +1,12 @@
-# Virtualenvs
+# Virtualenv
 venv/
 .venv/
 
-# Python artefatos
+# Python
 __pycache__/
 *.py[cod]
 
-# Pastas temporárias do seu app
-temp_*/
+# artefatos temporários
+temp_*
 output_*/
 resultados_*.zip
