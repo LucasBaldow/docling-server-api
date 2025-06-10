@@ -1,0 +1,19 @@
+# Framework web e ferramentas ASGI
+fastapi>=0.95.2
+uvicorn[standard]>=0.22.0
+
+# Document parsing
+docling>=2.9.0
+
+# Para exportar tabelas como DataFrame
+pandas>=2.0.3
+openpyxl>=3.1.1
+
+# Suporte a arquivos .rar
+rarfile>=4.3
+
+# Upload de arquivos multipart/form-data
+python-multipart>=0.0.6
+
+# (Opcional) Facilita carregar variáveis de ambiente, se você usar .env
+python-dotenv>=1.0.0
