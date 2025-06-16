@@ -64,39 +64,7 @@ def upload_file(
         logger.error("Erro em /upload-file/: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
 
-    """
-    Recebe um ZIP, extrai em memória, aplica processar_pasta() e devolve
-    todos os resultados em um ZIP gerado em memória.
-    """
-    try:
-        # 1) Extrair ZIP recebido em dir temporário
-        temp_dir = tempfile.TemporaryDirectory()
-        with zipfile.ZipFile(zip_file.file, "r") as zf:
-            zf.extractall(temp_dir.name)
-
-        # 2) Converter cada arquivo da pasta
-        resultados = processar_pasta(temp_dir.name)
-
-        # 3) Criar ZIP de saída em memória
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf_out:  # compresslevel opcional :contentReference[oaicite:8]{index=8}
-            for rel, conteudo in resultados.items():
-                arcname = f"{Path(rel).stem}.json"
-                zf_out.writestr(arcname, json.dumps(conteudo, ensure_ascii=False))
-
-        buffer.seek(0)
-
-        # 4) Retornar StreamingResponse com ZIP
-        return StreamingResponse(
-            buffer,
-            media_type="application/zip",
-            headers={"Content-Disposition": 'attachment; filename="resultados.zip"'}
-        )
-
-    except Exception as e:
-        logger.error("Erro em /upload-zip/: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
-
+   
 @app.post("/upload-archive/")
 async def upload_archive(file: UploadFile = File(...)):
     """
