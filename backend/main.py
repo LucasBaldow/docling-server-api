@@ -9,6 +9,7 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from backend.converter import converter_arquivo, processar_pasta
+from backend.danfe_converter import converter_danfe
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +51,7 @@ def upload_file(
         tmp_json.close()
 
         # 4) Agendar limpeza dos temporários
-        background_tasks.add_task(_remove_file, tmp_input.name)         # Limpeza em background :contentReference[oaicite:7]{index=7}
+        background_tasks.add_task(_remove_file, tmp_input.name)         # Limpeza em background
         background_tasks.add_task(_remove_file, tmp_json.name)
 
         # 5) Retornar JSON como FileResponse
@@ -63,6 +64,60 @@ def upload_file(
     except Exception as e:
         logger.error("Erro em /upload-file/: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/upload-danfe/")
+def upload_danfe(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """
+    Recebe um arquivo DANFE (PDF), processa com extração de key-value pairs
+    e retorna JSON estruturado com texts, tables e metadata.
+    """
+    try:
+        # Validar se é PDF
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Arquivo deve ser um PDF")
+        
+        # 1) Salvar arquivo recebido em temp file
+        suffix = Path(file.filename).suffix or ""
+        tmp_input = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp_input.write(file.file.read())
+        tmp_input.flush()
+        tmp_input.close()
+
+        # 2) Converter DANFE com extração específica
+        resultado = converter_danfe(tmp_input.name)
+
+        # 3) Verificar se houve erro no processamento
+        if "error" in resultado:
+            background_tasks.add_task(_remove_file, tmp_input.name)
+            raise HTTPException(status_code=400, detail=resultado["error"])
+
+        # 4) Gravar JSON em arquivo temporário
+        tmp_json = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+        tmp_json.write(json.dumps(resultado, ensure_ascii=False).encode())
+        tmp_json.flush()
+        tmp_json.close()
+
+        # 5) Agendar limpeza dos temporários
+        background_tasks.add_task(_remove_file, tmp_input.name)
+        background_tasks.add_task(_remove_file, tmp_json.name)
+
+        # 6) Retornar JSON como FileResponse
+        return FileResponse(
+            path=tmp_json.name,
+            media_type="application/json",
+            filename=f"{Path(file.filename).stem}_danfe.json"
+        )
+
+    except HTTPException:
+        # Re-raise HTTPException para manter status code
+        raise
+    except Exception as e:
+        logger.error("Erro em /upload-danfe/: %s", e)
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
    
 @app.post("/upload-archive/")
@@ -89,12 +144,12 @@ async def upload_archive(file: UploadFile = File(...)):
             with zipfile.ZipFile(buffer_in) as zf:
                 zf.extractall(temp_dir.name)
         else:  # .rar
-            with rarfile.RarFile(buffer_in) as rf:                   # → RarFile :contentReference[oaicite:3]{index=3}
+            with rarfile.RarFile(buffer_in) as rf:
                 rf.extractall(path=temp_dir.name)
     except zipfile.BadZipFile:
         raise HTTPException(400, detail="ZIP inválido ou corrompido")
     except rarfile.BadRarFile:
-        raise HTTPException(400, detail="RAR inválido ou corrompido")  # erro específico :contentReference[oaicite:4]{index=4}
+        raise HTTPException(400, detail="RAR inválido ou corrompido")
     except Exception as e:
         raise HTTPException(400, detail=f"Falha ao extrair arquivo: {e}")
 
@@ -117,6 +172,8 @@ async def upload_archive(file: UploadFile = File(...)):
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="resultados.zip"'}
     )
+
+
 @app.post("/process-url/")
 def process_url(url: str):
     """
@@ -124,7 +181,8 @@ def process_url(url: str):
     """
     try:
         resultado = converter_arquivo(url)
-        return JSONResponse(content=resultado)                           # JSON direto sem I/O :contentReference[oaicite:9]{index=9}
+        return JSONResponse(content=resultado)
     except Exception as e:
         logger.error("Erro em /process-url/: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
+
